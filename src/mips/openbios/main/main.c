@@ -38,6 +38,7 @@ SOFTWARE.
 #include "common/psxlibc/setjmp.h"
 #include "common/syscalls/syscalls.h"
 #include "openbios/cdrom/cdrom.h"
+#include "openbios/diagnostics/log.h"
 #include "openbios/fileio/fileio.h"
 #include "openbios/kernel/events.h"
 #include "openbios/kernel/globals.h"
@@ -70,6 +71,7 @@ void bootThunk() {
 }
 
 int main() {
+    OB_LOG_INFO("BOOT", "Entering OpenBIOS");
     // __globals60.ramsize would be set here in the retail BIOS, however we have
     // already done so in the startup code (it's easier to do it there for
     // arcade boards - the ZN kernel does the same).
@@ -124,6 +126,7 @@ struct JmpBuf g_ioAbortJmpBuf;
 // being too defensive in how this behaves, and syscall_exception ought
 // to be flagged noreturn.
 static __attribute__((noreturn)) void fatal(int code) {
+    OB_LOG_ERROR("BOOT", "Fatal error code=0x%03x", (unsigned)code);
     POST = 0x0f;
     syscall_exception(0x42, code);
     __builtin_unreachable();
@@ -256,6 +259,7 @@ static void kernelSetup() {
     syscall_enqueueIrqHandler(3);
     initEvents(s_configuration.eventsCount);
     initThreads(1, s_configuration.taskCount);
+    OB_LOG_INFO("BOOT", "Kernel configured: events=%d tasks=%d", s_configuration.eventsCount, s_configuration.taskCount);
     syscall_enqueueRCntIrqs(1);
     initializeCDRomHandlersAndEvents();
 }
@@ -367,6 +371,7 @@ static void boot(char *systemCnfPath, char *binaryPath) {
     syscall_enqueueIrqHandler(3);
     initEvents(s_configuration.eventsCount);
     initThreads(1, s_configuration.taskCount);
+    OB_LOG_INFO("BOOT", "Kernel initialized");
     syscall_enqueueRCntIrqs(1);
     muteSpu();
     SETJMPFATAL(0x385);
@@ -379,12 +384,15 @@ static void boot(char *systemCnfPath, char *binaryPath) {
     // always passed down to the shell is 0x07, due to the POST
     // set just above, and the way this is deterministic.
     startShell(7);
+    OB_LOG_DEBUG("BOOT", "Shell stage returned");
 
 #ifndef OPENBIOS_BOOT_MODE_NO_CDROM
     POST = 8;
     IMASK = 0;
     IREG = 0;
+    OB_LOG_INFO("CDROM", "Initializing CD-ROM");
     initCDRom();
+    OB_LOG_INFO("CDROM", "CD-ROM initialization returned");
     SETJMPFATAL(0x399);
     // See the note about hooks in main().
     runExp1PostHook();
@@ -394,6 +402,7 @@ static void boot(char *systemCnfPath, char *binaryPath) {
     SETJMPFATAL(0x387);
     int fd = syscall_open(systemCnfPath, PSXF_READ);
     if (fd < 0) {
+        OB_LOG_WARN("BOOT", "Cannot open %s; using %s", systemCnfPath, binaryPath);
         SETJMPFATAL(0x391);
         *((uint32_t *)0x00000180) = 0;
         s_configuration = g_defaultConfiguration;
@@ -403,6 +412,7 @@ static void boot(char *systemCnfPath, char *binaryPath) {
         SETJMPFATAL(0x38f);
         int sysCnfSize = syscall_read(fd, g_readBuffer, 2048);
         if (sysCnfSize == 0) {
+            OB_LOG_WARN("BOOT", "Empty %s; using %s", systemCnfPath, binaryPath);
             s_configuration = g_defaultConfiguration;
             strcpy(s_binaryPath, binaryPath);
         } else {
@@ -417,6 +427,7 @@ static void boot(char *systemCnfPath, char *binaryPath) {
     psxprintf("boot file     : %s\n", s_binaryPath);
     SETJMPFATAL(0x389);
     zeroUserMemoryUntilStack();
+    OB_LOG_INFO("BOOT", "Loading boot executable: %s", s_binaryPath);
     if (!loadExe(s_binaryPath, &s_binaryInfo)) fatal(0x38a);
     psxprintf("EXEC:PC0(%08x)  T_ADDR(%08x)  T_SIZE(%08x)\n", s_binaryInfo.pc, s_binaryInfo.text_addr,
               s_binaryInfo.text_size);
@@ -427,7 +438,10 @@ static void boot(char *systemCnfPath, char *binaryPath) {
     psxprintf("                S_ADDR(%08x)  S_SIZE(%08x)\n", s_configuration.stackBase, 0);
     enterCriticalSection();
     SETJMPFATAL(0x38b);
+    OB_LOG_INFO("BOOT", "Starting game: pc=%08x sp=%08x", (unsigned)s_binaryInfo.pc,
+                (unsigned)s_binaryInfo.stack_start);
     gameMainThunk(&s_binaryInfo, 1, NULL);
+    OB_LOG_WARN("BOOT", "Game returned to BIOS");
 #endif
 
     psxprintf("End of Main\n");

@@ -32,36 +32,56 @@ SOFTWARE.
 
 #include "common/psxlibc/stdio.h"
 #include "common/syscalls/syscalls.h"
+#include "openbios/diagnostics/log.h"
 #include "openbios/fileio/fileio.h"
 #include "openbios/kernel/flushcache.h"
 #include "openbios/kernel/util.h"
 
 static int readHeader(int fd, struct psxExeHeader *header) {
-    if (syscall_read(fd, g_readBuffer, 2048) >= 2048) {
+    int bytesRead = syscall_read(fd, g_readBuffer, 2048);
+    if (bytesRead >= 2048) {
         memcpy(header, g_readBuffer + 16, 60);  // BIOS does not copy the whole struct
         return 1;
     }
 
+    OB_LOG_ERROR("EXE", "Header read failed: fd=%d bytes=%d expected=2048", fd, bytesRead);
     return 0;
 }
 
 int loadExeHeader(const char *filename, struct psxExeHeader *header) {
+    OB_LOG_DEBUG("EXE", "Reading header: %s", filename);
     int fd = syscall_open(filename, PSXF_READ);
-    if (fd < 0) return 0;
+    if (fd < 0) {
+        OB_LOG_ERROR("EXE", "Cannot open header: %s result=%d", filename, fd);
+        return 0;
+    }
     int ret = readHeader(fd, header);
     syscall_close(fd);
     return ret;
 }
 
 int loadExe(const char *filename, struct psxExeHeader *header) {
+    OB_LOG_INFO("EXE", "Loading %s", filename);
     int fd = syscall_open(filename, PSXF_READ);
-    if (fd < 0) return 0;
+    if (fd < 0) {
+        OB_LOG_ERROR("EXE", "Cannot open %s result=%d", filename, fd);
+        return 0;
+    }
     int ret = readHeader(fd, header);
     if (ret == 0) {
         syscall_close(fd);
         return 0;
     }
-    syscall_read(fd, (char *)header->text_addr, header->text_size);
+    OB_LOG_DEBUG("EXE", "pc=%08x text=%08x size=%08x", (unsigned)header->pc,
+                 (unsigned)header->text_addr, (unsigned)header->text_size);
+    int bytesRead = syscall_read(fd, (char *)header->text_addr, header->text_size);
+    if (bytesRead < 0 || (unsigned)bytesRead != header->text_size) {
+        // Diagnose without changing the retail-compatible return behavior.
+        OB_LOG_ERROR("EXE", "Payload read incomplete: %s bytes=%d expected=%u", filename, bytesRead,
+                     (unsigned)header->text_size);
+    } else {
+        OB_LOG_INFO("EXE", "Loaded %s bytes=%d", filename, bytesRead);
+    }
     syscall_close(fd);
     flushCache();
     return 1;

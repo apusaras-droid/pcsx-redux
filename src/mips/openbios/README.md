@@ -40,6 +40,38 @@ The Makefile features several toggles to mutate the way the compilation works. D
 - `SPLASH_SCREEN=true` will make the kernel display color bars on screen during initialization. This is also done by some official non-retail BIOS variants and is useful when using the `EMBED_PSEXE` option with a large (100+ KB) binary, as relocating it to RAM will take a couple of seconds.
 - `INSTALL_TTY_CONSOLE=true` will make OpenBIOS install a DTL-H2000 host console driver in place of the default "dummy" TTY driver. Note that this is *not* the DUART driver found in a retail BIOS.
 
+## Optional diagnostic logging (this fork)
+
+Build with `LOG_LEVEL=3` for boot, CD-ROM initialization, executable loading,
+and error messages. `LOG_LEVEL=4` also prints executable addresses and shell
+stage diagnostics. Levels are cumulative: `0` off (default), `1` errors,
+`2` warnings, `3` info, `4` debug. Run `make clean` when changing levels.
+Existing BIOS console messages are independent of this setting.
+
+From this directory, with the upstream Docker build environment:
+
+```sh
+../../../dockermake.sh clean
+../../../dockermake.sh -j4 BUILD=SmallDebug LOG_LEVEL=3
+```
+
+On Windows, run `..\..\..\dockermake.bat` with the same arguments.
+Use the resulting `openbios.bin` in PCSX-Redux, for example:
+
+```sh
+pcsx-redux -bios openbios.bin -stdout -logfile openbios.log
+```
+
+Messages look like `[OpenBIOS][INFO][EXE] Loading cdrom:PSX.EXE;1`.
+The backend uses the existing `BoardConsolePrintf` debug port, bypassing BIOS
+file I/O so error reporting does not depend on a working TTY or filesystem.
+It targets PCSX-Redux; it does not provide a physical serial transport.
+Disabled messages do not evaluate their arguments. Logging can affect timing;
+it is intended for diagnostic builds. Payload short reads are reported without
+changing the existing loader's return value or game compatibility behavior.
+
+For PC development features, see [PC development notes](PC-DEVELOPMENT.ja.md).
+
 ## Status
 
 This subproject is fairly functional and usable. OpenBIOS does almost all the same things as the retail BIOS does when booting, and implements most of its features. Many games are booting and working properly with this code. It can be used in emulators or on the real console, either while replacing the rom chip, or by using the "cart" build and programming the flash chip of a cheat cart with the result.

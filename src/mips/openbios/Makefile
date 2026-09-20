@@ -106,6 +106,16 @@ endif
 
 CPPFLAGS =
 
+# Additional diagnostics, independent of BUILD and the existing BIOS console.
+LOG_LEVEL ?= 0
+ifneq ($(words $(LOG_LEVEL)),1)
+$(error LOG_LEVEL must be one of 0 1 2 3 4)
+endif
+ifeq ($(filter $(LOG_LEVEL),0 1 2 3 4),)
+$(error LOG_LEVEL must be one of 0 1 2 3 4)
+endif
+CPPFLAGS += -DOPENBIOS_LOG_LEVEL=$(LOG_LEVEL)
+
 ifneq ($(BOARD),psx)
 # Disable cheat cart builds and CD-ROM/shell support for arcade boards.
 BOOT = rom
