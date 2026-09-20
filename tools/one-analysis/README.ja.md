@@ -1,5 +1,8 @@
 # ONE解析用のPCSX-Redux環境
 
+CDの名前・配置・シナリオ対応表の調査は
+[設計の手がかり](../../docs/one-disc-design-clues.ja.md)を参照。
+
 2026-09-20: PCSX-Redux `25477.20260919.11.x64`（changeset
 `a409befe8215caeb1bdb92e5cd654f1254657b26`）と未改造SCPH-5500日本版で、
 Disc 1 / SLPS-01972の最初の文章表示まで確認。
