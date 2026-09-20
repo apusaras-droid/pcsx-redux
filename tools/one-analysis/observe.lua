@@ -51,6 +51,7 @@ handlers['one-pad'] = function(request)
     end
     local pad = PCSX.SIO0.slots[1].pads[1]
     if query.pressed == '1' then pad.setOverride(button) else pad.clearOverride(button) end
+    if ONETrace and ONETrace.enabled then ONETrace.emit('input', {button=query.button, pressed=query.pressed=='1'}) end
     return '{"ok":true}'
 end
 print('ONE observer ready: BIOS entry calls only; per-function cap=128, total cap=20000')
@@ -96,3 +97,6 @@ handlers['one-watch-status'] = function()
     watchOutput:flush()
     return string.format('{"events":%d,"limit":%d}', watch.count, watch.limit)
 end
+
+local source = debug.getinfo(1, 'S').source:sub(2)
+dofile(source:match('^(.*[/\\])') .. 'trace.lua')

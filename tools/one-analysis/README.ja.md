@@ -11,6 +11,61 @@ CDの名前・配置・シナリオ対応表の調査は
 本編のみを対象とした[シナリオ収集範囲の再確認](../../docs/one-scenario-coverage.ja.md)も参照。
 [選択肢命令0x11・0x20の確認](../../docs/one-choice-instructions.ja.md)も追加した。
 
+## 統合イベントログ
+
+`start.ps1`の通常起動で`observe.lua`から`trace.lua`も読み込む。
+ゲームをロードし、一時停止した後に有効化する。SLPS-01972の6か所の命令語を
+照合し、不一致なら開始を拒否する。この版のInterpreter専用。
+
+```powershell
+Invoke-RestMethod -Method Post 'http://127.0.0.1:18080/api/v1/lua/one-trace?action=start&pause_choice=1'
+Invoke-RestMethod -Method Post 'http://127.0.0.1:18080/api/v1/execution-flow?function=resume'
+Invoke-RestMethod 'http://127.0.0.1:18080/api/v1/lua/one-trace-status'
+# 停止
+Invoke-RestMethod -Method Post 'http://127.0.0.1:18080/api/v1/lua/one-trace?action=stop'
+```
+
+`pause_choice=1`は次の選択命令0x20で一度だけ停止する。省略すれば停止しない。
+ログは `.tools/redux/scenario-trace.jsonl`。同一セッションの連番・epoch・CPUサイクルを持つ。
+ステートをロードする前にstopし、ロード後にstartすること。新しいepochになり、
+巻き戻し前後の状態差分を混ぜない。ログは再起動前にstart.ps1が退避する。
+
+- `command`: 場面名、シナリオ位置、命令。連続する同一位置の待機は省略。
+- `input`: one-pad経由の入力。物理パッド入力そのものの記録ではない。
+- `choice_text`, `choice_begin`, `choice_result`: 項目のCP932バイト、項目数、結果変数と値。
+- `state_change`: フラグ32バイト・数値20バイトの前後差分。観測点間の変化であり、
+  一時的な書込みすべてや、厳密な変更元PCを記録するものではない。
+- `branch`: 条件結果と予定移動先。次のcommandで実際の移動先を照合できる。
+  複合条件のlhs/rhsは最後の比較のみ。
+- `snapshot_begin/ready`: 内部レコード構築と完了時の128バイト・チェックサム。
+- `restore_begin/return`: ゲーム側復元関数への出入り。
+- `card_call/return`: 特定のゲーム側カード転送呼出しと戻り値。
+  非同期カード処理の完了やカード上の全書込みを証明しない。
+- `bios_io`: A0の00〜04、B0の32〜36のファイルI/O入口と引数。
+
+最大30,000行で自動無効化。Lua例外もtrace_errorを出して無効化する。
+ゲーム・BIOSのRAMやROMを書き換えず、観測にはブレークポイントを使う。
+戻り位置の一時ブレークポイントは各種1件までなので、再入可能な一般トレーサーではない。
+
+### 実機能の検証結果
+
+エミュレーター内の冒頭2択を同じ直前状態から両方選んだ。
+
+| 操作 | 変数16 | 比較結果 | 実際の次命令 |
+| --- | --- | --- | --- |
+| 上の項目を決定 | 1 | 成立 | NV30 +0x401 |
+| DOWNで下へ移動して決定 | 2 | 不成立 | NV30 +0x465 |
+
+両方で後続の内部レコードの変数16も一致し、チェックサムも一致した。
+冒頭進行中8回と、分岐後2回のsnapshot_readyでチェックサム一致、trace_errorなし。
+検証ログ: `.tools/redux-analysis/trace-intro.jsonl` と `trace-choices.jsonl`。
+選択前のエミュレーター用保存状態: `one-trace-choice`。
+カード未挿入のため、カードI/O・ゲーム内ロードの新フックは実動作未検証。
+
+```powershell
+python tools/one-analysis/check_trace.py .tools/redux-analysis/trace-choices.jsonl --verify-opening
+```
+
 2026-09-20: PCSX-Redux `25477.20260919.11.x64`（changeset
 `a409befe8215caeb1bdb92e5cd654f1254657b26`）と未改造SCPH-5500日本版で、
 Disc 1 / SLPS-01972の最初の文章表示まで確認。

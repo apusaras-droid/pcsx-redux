@@ -5,7 +5,7 @@ $appDir = Join-Path $repo '.tools/redux'
 $disc = Join-Path $repo '.tools/redux-analysis/disc1/disc.cue'
 $bios = Join-Path $appDir 'scph5500.bin'
 $observer = Join-Path $PSScriptRoot 'observe.lua'
-foreach ($file in @((Join-Path $appDir 'pcsx-redux.exe'), $disc, $bios, $observer)) {
+foreach ($file in @((Join-Path $appDir 'pcsx-redux.exe'), $disc, $bios, $observer, (Join-Path $PSScriptRoot 'trace.lua'))) {
     if (-not (Test-Path -LiteralPath $file)) { throw "Missing file: $file" }
     if ($file -match '[^\x00-\x7F]') { throw "Use an ASCII path for this PCSX-Redux build: $file" }
 }
@@ -18,7 +18,7 @@ if (Get-NetTCPConnection -LocalPort 18080 -State Listen -ErrorAction SilentlyCon
 $mode = if ($Baseline) { 'baseline' } else { 'observed' }
 $log = Join-Path $repo ".tools/redux-analysis/$mode.log"
 $archive = Join-Path $repo ('.tools/redux-analysis/archive/' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff'))
-foreach ($previous in @($log, (Join-Path $appDir 'bios-calls.csv'), (Join-Path $appDir 'memory-watch.csv'))) {
+foreach ($previous in @($log, (Join-Path $appDir 'bios-calls.csv'), (Join-Path $appDir 'memory-watch.csv'), (Join-Path $appDir 'scenario-trace.jsonl'))) {
     if (Test-Path -LiteralPath $previous) {
         New-Item -ItemType Directory -Force $archive | Out-Null
         Copy-Item -LiteralPath $previous -Destination $archive
