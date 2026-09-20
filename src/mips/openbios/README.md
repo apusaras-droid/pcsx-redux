@@ -65,7 +65,10 @@ pcsx-redux -bios openbios.bin -stdout -logfile openbios.log
 Messages look like `[OpenBIOS][INFO][EXE] Loading cdrom:PSX.EXE;1`.
 The backend uses the existing `BoardConsolePrintf` debug port, bypassing BIOS
 file I/O so error reporting does not depend on a working TTY or filesystem.
-It targets PCSX-Redux; it does not provide a physical serial transport.
+DuckStation also captures this port as TTY output. Enable file logging at Info
+level (or higher) to record it in `duckstation.log`. Select `openbios.bin` for
+the desired BIOS regions and disable the fast-boot patch when testing the full
+boot path. This backend does not provide a physical serial transport.
 Disabled messages do not evaluate their arguments. Logging can affect timing;
 it is intended for diagnostic builds. Payload short reads are reported without
 changing the existing loader's return value or game compatibility behavior.
