@@ -25,7 +25,8 @@ Invoke-RestMethod 'http://127.0.0.1:18080/api/v1/lua/one-trace-status'
 Invoke-RestMethod -Method Post 'http://127.0.0.1:18080/api/v1/lua/one-trace?action=stop'
 ```
 
-`pause_choice=1`は次の選択命令0x20で一度だけ停止する。省略すれば停止しない。
+`pause_choice=1`は各選択命令0x20へ入った時に停止する。同じ選択肢で再開しても
+停止を繰り返さず、決定後に次の選択肢で停止する。省略すれば停止しない。
 ログは `.tools/redux/scenario-trace.jsonl`。同一セッションの連番・epoch・CPUサイクルを持つ。
 ステートをロードする前にstopし、ロード後にstartすること。新しいepochになり、
 巻き戻し前後の状態差分を混ぜない。ログは再起動前にstart.ps1が退避する。
@@ -65,6 +66,53 @@ Invoke-RestMethod -Method Post 'http://127.0.0.1:18080/api/v1/lua/one-trace?acti
 ```powershell
 python tools/one-analysis/check_trace.py .tools/redux-analysis/trace-choices.jsonl --verify-opening
 ```
+
+## 選択肢を保存する解析用オートプレイ
+
+`autoplay.py`は一つの選択地点から各項目を試し、それぞれ次の選択地点まで進める。
+総当たりの全編攻略ではなく、選択結果の比較と次回解析の開始地点を作る実験。
+通常のstart.ps1で起動したInterpreterと、この版のtrace.luaが必要。
+
+```powershell
+python tools/one-analysis/autoplay.py .tools/redux-analysis/new-autoplay --seed one-trace-choice --seconds 150
+# 保存した次の選択地点を、過去の選択履歴ごと再利用
+python tools/one-analysis/autoplay.py .tools/redux-analysis/new-autoplay-next --seed-checkpoint .tools/redux-analysis/autoplay-first/item-1/checkpoint.json --seconds 150
+```
+
+出力先は未作成ディレクトリー。`--seconds`は各分岐の進行時間上限（1〜600秒）。
+文章送りは既知の待機命令0x16/0x17でのみ行う。Luaが選択命令で止めるため、
+通常の文章送りで選択肢を自動決定しない。選択は実験側が明示的に行う。
+次の選択肢、時間上限、同一命令での停滞、トレース停止、予期しない一時停止で
+進行を止め、正常にAPIへ接続できる場合はその地点を保存する。
+エンディングの自動判定や状態の等価性による探索省略はまだ実装していない。
+
+各地点に`checkpoint.json`、`state.sstate`、`ram.bin`、`screen.png`、`trace.jsonl`を保存する。
+JSONには親の保存名、選択履歴、場面・位置、変数・フラグ、ハッシュを含む。
+`run.json`にはBIOS・実行バイナリー・設定・解析スクリプトのハッシュ等を保存する。
+選択肢の文章はログにchoice_textがあれば添付し、ない場合はnull。
+RAMのdisplay_rowsには古い文章の末尾が残る場合があり、正確な項目名として扱わない。
+画面と生バイトも保存し、表示状態を確認できるようにする。
+
+セーブ名は実行ごとのランダムIDを含み、既存の単一スロットを上書きしない。
+エミュレーターが参照する状態は`.tools/redux/SLPS01972/`に残し、出力先にも複製する。
+`--seed-checkpoint`ではエミュレーター側の状態ファイルのハッシュを照合する。
+別PCへ移す際の自動復元や、異なるエミュレーター版の互換性は保証しない。
+メモリーカードを使った原作セーブとは別の仕組み。
+
+ログの30,000行上限は維持する。到達したら停止して保存し、無制限にログを増やさない。
+エラー時も入力を解除して一時停止する。開始前の状態もbeforeとして保存する。
+
+### 今回の結果
+
+`.tools/redux-analysis/autoplay-first/`に、開始前・冒頭2択・各項目の先を保存した。
+冒頭の各項目を選んだ2経路とも、次の選択命令NV30 +0x633へ到達。
+その地点で変数16が1と2に分かれていたため、別の状態として保持した。
+root・item-1・item-2を再ロードし、2 MiBのRAMが保存時のSHA256と全て一致。
+検証結果は同フォルダーの`restore-validation.json`。
+
+さらに`autoplay-reuse-check/`ではitem-1の保存状態を再利用し、両項目を選択。
+1秒の進行上限で停止・保存する動作と、親からの選択履歴の引継ぎを確認した。
+NV30 +0x67Dと+0x723に分かれた。長時間の全編動作は未検証。
 
 2026-09-20: PCSX-Redux `25477.20260919.11.x64`（changeset
 `a409befe8215caeb1bdb92e5cd654f1254657b26`）と未改造SCPH-5500日本版で、

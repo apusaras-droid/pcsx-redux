@@ -101,6 +101,7 @@ hook(0x80018528, function()
     local p = word(tonumber(g.gp)+0x978)
     if p>=0x10000 then error('Unexpected script position') end
     local op = byte(0x800ea728+p)
+    trace.scene, trace.position, trace.opcode = scene(), p, op
     local key = scene()..':'..p..':'..op
     changes()
     if key~=trace.last then
@@ -116,7 +117,8 @@ hook(0x80018528, function()
     if op==0x20 and trace.choiceKey~=key then
         trace.choiceKey=key
         emit('choice_begin', {scene=scene(), offset=p, variable=byte(0x800ea729+p), count=byte(0x800ea72a+p)})
-        if trace.pauseChoice then trace.pauseChoice=false; PCSX.pauseEmulator() end
+        trace.choiceCount, trace.choiceVariable = byte(0x800ea72a+p), byte(0x800ea729+p)
+        if trace.pauseChoice then trace.atChoice=true; PCSX.pauseEmulator() end
     end
 end)
 hook(0x80019a68, function()
@@ -124,7 +126,7 @@ hook(0x80019a68, function()
     local p=word(gp+0x978)
     local index=byte(0x800ea729+p)
     emit('choice_result', {scene=scene(), offset=p, variable=index, value=byte(0x800fa840+index)})
-    changes(); trace.choiceKey=nil
+    changes(); trace.choiceKey=nil; trace.atChoice=false
 end)
 hook(0x8001a7f8, function()
     local gp=tonumber(PCSX.getRegisters().GPR.n.gp)
@@ -176,11 +178,15 @@ PCSX.WebServer.Handlers['one-trace'] = function(request)
     for _,bp in pairs(trace.returns) do bp:remove() end
     trace.returns={}; trace.epoch=trace.epoch+1; trace.last=nil; trace.choiceKey=nil; trace.choiceTextKey=nil
     trace.flags,trace.numeric=state()
+    trace.atChoice=false; trace.choiceCount=0; trace.choiceVariable=0
     trace.pauseChoice=query.pause_choice=='1'; trace.enabled=true
     emit('start', {flags=trace.flags, numeric=trace.numeric, profile='SLPS-01972'})
     return json({enabled=true, epoch=trace.epoch})
 end
 PCSX.WebServer.Handlers['one-trace-status'] = function()
-    return json({enabled=trace.enabled, rows=trace.rows, limit=trace.limit, epoch=trace.epoch})
+    return json({enabled=trace.enabled, rows=trace.rows, limit=trace.limit, epoch=trace.epoch,
+        at_choice=trace.atChoice or false, choice_count=trace.choiceCount or 0,
+        choice_variable=trace.choiceVariable or 0, scene=trace.scene or '',
+        offset=trace.position or -1, opcode=trace.opcode or -1})
 end
 print('ONE scenario trace ready; enable after game load with POST one-trace?action=start')
