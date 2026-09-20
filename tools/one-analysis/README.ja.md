@@ -7,6 +7,7 @@ CDの名前・配置・シナリオ対応表の調査は
 状態の保存・復元については[内部レコードの調査](../../docs/one-save-state-layout.ja.md)を参照。
 シナリオから抽出した操作・参照と保存位置の対応は
 [フラグ対応表の調査](../../docs/one-flag-map.ja.md)を参照。
+確認済みの流れは[部分フローチャート](../../docs/one-flowcharts.ja.md)で確認できる。
 
 2026-09-20: PCSX-Redux `25477.20260919.11.x64`（changeset
 `a409befe8215caeb1bdb92e5cd654f1254657b26`）と未改造SCPH-5500日本版で、
