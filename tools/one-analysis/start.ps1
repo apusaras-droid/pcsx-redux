@@ -18,7 +18,7 @@ if (Get-NetTCPConnection -LocalPort 18080 -State Listen -ErrorAction SilentlyCon
 $mode = if ($Baseline) { 'baseline' } else { 'observed' }
 $log = Join-Path $repo ".tools/redux-analysis/$mode.log"
 $archive = Join-Path $repo ('.tools/redux-analysis/archive/' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff'))
-foreach ($previous in @($log, (Join-Path $appDir 'bios-calls.csv'))) {
+foreach ($previous in @($log, (Join-Path $appDir 'bios-calls.csv'), (Join-Path $appDir 'memory-watch.csv'))) {
     if (Test-Path -LiteralPath $previous) {
         New-Item -ItemType Directory -Force $archive | Out-Null
         Copy-Item -LiteralPath $previous -Destination $archive

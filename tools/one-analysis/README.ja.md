@@ -79,4 +79,31 @@ Invoke-RestMethod -Method Post 'http://127.0.0.1:18080/api/v1/execution-flow?fun
 
 ゲームの正常動作・計測の成立を確認した範囲はここまで。
 全編の互換性、観測負荷による時間差、シナリオ命令の意味はまだ検証していない。
-次はCDの読み込みとRAM上のデータを対応付け、文章描画・シナリオ解釈の関数を特定する。
+その後のシナリオ解析結果は[根拠付きメモ](../../docs/one-scenario-findings.ja.md)を参照。
+
+## シナリオ資源の検証
+
+標準PythonだけでMODE2/2352のISO一覧と冒頭資源の展開・RAM照合を行う。
+`verify_scenario.py`のオフセットは今回のDisc 1専用。別版や別場面のRAMは対象外。
+出力にはゲーム由来のデータを含むため、ローカルのGit管理外フォルダーを使う。
+
+```powershell
+python tools/one-analysis/disc.py .tools/redux-analysis/disc1/disc.bin .tools/redux-analysis/disc-inventory.json
+python tools/one-analysis/verify_scenario.py .tools/redux-analysis/disc1/disc.bin .tools/redux-analysis/intro-checkpoint/ram.bin .tools/redux-analysis/new-scenario-check
+python -m unittest discover -s tools/one-analysis -p test_lzss.py
+```
+
+RAM一致に失敗した場合も検証JSONを残し、終了コードを非ゼロにする。
+ISOリーダーは単一トラックの通常ファイル用で、XA音声やForm2動画のデコーダーではない。
+
+`observe.lua`は狭いRAM領域のRead/Write/Exec監視にも対応する。
+アドレスは16進数、幅は10進数、最大4096バイト。最大512イベントで自動解除する。
+再設定すると前の監視は解除され、同じCSVに区切り行を追記する。
+
+```powershell
+Invoke-RestMethod -Method Post 'http://127.0.0.1:18080/api/v1/lua/one-watch?address=800ea720&width=1024&type=Read'
+Invoke-RestMethod 'http://127.0.0.1:18080/api/v1/lua/one-watch-status'
+```
+
+出力は `.tools/redux/memory-watch.csv`。実行を止めずにPC・アクセス先・
+レジスターを記録するため、各イベント時点の完全なRAMスナップショットではない。
